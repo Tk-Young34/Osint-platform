@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRACE — OSINT Investigator Platform</title>
+<style>
+  :root{
+    --bg:#0A0D0F; --panel:#10151A; --panel2:#0D1216;
+    --line:#1C2730; --line-bright:#2A3942;
+    --ink:#E9EFF2; --ink-dim:#8B9BA6; --ink-faint:#54646E;
+    --teal:#3FD0C9; --teal-dim:#1B8F89;
+    --amber:#E8A23D; --red:#E2585A; --green:#5DCAA5;
+    --mono:"JetBrains Mono","SF Mono",Consolas,monospace;
+    --sans:"Inter",-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:var(--sans); min-height:100vh;}
+  a{color:var(--teal); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  button{font-family:var(--sans); cursor:pointer;}
+
+  .app{display:grid; grid-template-columns:220px 1fr; min-height:100vh;}
+  .sidebar{
+    background:var(--panel2); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; padding:20px 0;
+  }
+  .brand{
+    font-family:var(--mono); font-size:14px; letter-spacing:0.1em; font-weight:600;
+    padding:0 20px 20px; display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid var(--line); margin-bottom:14px;
+  }
+  .brand .dot{width:7px; height:7px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 3px rgba(63,208,201,0.15);}
+  .nav-group{padding:0 12px; margin-bottom:6px;}
+  .nav-label{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--ink-faint); padding:14px 10px 6px;
+  }
+  .nav-btn{
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    background:none; border:none; color:var(--ink-dim); font-size:13px;
+    padding:9px 10px; border-radius:5px; margin-bottom:1px;
+  }
+  .nav-btn:hover{background:rgba(255,255,255,0.04); color:var(--ink);}
+  .nav-btn.active{background:rgba(63,208,201,0.1); color:var(--teal);}
+  .nav-btn .ic{width:14px; text-align:center; font-size:13px; opacity:0.8;}
+  .sidebar-foot{margin-top:auto; padding:14px 20px 4px; border-top:1px solid var(--line);}
+  .sidebar-foot .note{font-family:var(--mono); font-size:10px; color:var(--ink-faint); line-height:1.6;}
+
+  main{padding:36px 44px 80px; max-width:980px;}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:8px;}
+  h1{font-size:26px; font-weight:600; letter-spacing:-0.01em; margin-bottom:6px;}
+  .sub{color:var(--ink-dim); font-size:13.5px; max-width:600px; line-height:1.6; margin-bottom:28px;}
+
+  .search-row{display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap;}
+  .search-row input{
+    flex:1; min-width:220px; background:var(--panel); border:1px solid var(--line); color:var(--ink);
+    font-family:var(--mono); font-size:13px; padding:12px 14px; outline:none; border-radius:5px;
+  }
+  .search-row input:focus{border-color:var(--teal-dim);}
+  .btn-primary{
+    background:var(--teal-dim); border:none; color:#04211E; font-weight:600; font-size:13px;
+    padding:12px 20px; border-radius:5px; letter-spacing:0.02em;
+  }
+  .btn-primary:hover{background:var(--teal);}
+  .btn-primary:disabled{opacity:0.5; cursor:default;}
+  .btn-secondary{
+    background:none; border:1px solid var(--line-bright); color:var(--ink-dim); font-size:12px;
+    padding:8px 14px; border-radius:5px;
+  }
+  .btn-secondary:hover{border-color:var(--teal-dim); color:var(--teal);}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:20px 22px; margin-bottom:18px;}
+  .panel h3{font-size:13px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;}
+  .panel h3 .tag{font-family:var(--mono); font-size:10px; color:var(--ink-faint); font-weight:400;}
+
+  .kv-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:14px;}
+  .kv{padding:2px 0;}
+  .kv .k{font-family:var(--mono); font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:4px;}
+  .kv .v{font-family:var(--mono); font-size:13.5px; color:var(--ink); word-break:break-word;}
+  .kv .v.dim{color:var(--ink-dim);}
+
+  .badge{display:inline-block; font-family:var(--mono); font-size:11px; padding:3px 9px; border-radius:3px; letter-spacing:0.02em;}
+  .badge.low{background:rgba(93,202,165,0.12); color:var(--green);}
+  .badge.med{background:rgba(232,162,61,0.12); color:var(--amber);}
+  .badge.high{background:rgba(226,88,90,0.12); color:var(--red);}
+
+  .placeholder-note{
+    border:1px dashed var(--line-bright); border-radius:6px; padding:16px 18px; font-size:12.5px;
+    color:var(--ink-dim); line-height:1.6; background:rgba(232,162,61,0.03);
+  }
+  .placeholder-note .ttl{color:var(--amber); font-family:var(--mono); font-size:11px; margin-bottom:6px; letter-spacing:0.04em;}
+
+  .link-list{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:8px; margin-top:6px;}
+  .link-item{
+    display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+    border:1px solid var(--line); border-radius:5px; font-size:12.5px; background:var(--panel2);
+  }
+  .link-item span{color:var(--ink-dim); font-family:var(--mono);}
+
+  table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px;}
+  thead th{text-align:left; padding:9px 12px; color:var(--ink-faint); font-weight:400; border-bottom:1px solid var(--line-bright); font-size:10px; letter-spacing:0.05em; text-transform:uppercase;}
+  tbody td{padding:10px 12px; border-bottom:1px solid var(--line); color:var(--ink-dim);}
+  tbody tr:hover td{background:rgba(63,208,201,0.04); color:var(--ink);}
+
+  .stat-row{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:7px; overflow:hidden; margin-bottom:24px;}
+  .stat{background:var(--panel); padding:16px 18px;}
+  .stat .label{font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:8px;}
+  .stat .num{font-family:var(--mono); font-size:22px; color:var(--teal);}
+
+  .empty-state{border:1px dashed var(--line-bright); padding:36px; text-align:center; color:var(--ink-faint); font-family:var(--mono); font-size:12px; border-radius:6px;}
+  .loading{font-family:var(--mono); font-size:12px; color:var(--ink-faint); display:flex; align-items:center; gap:8px;}
+  .loading .ld{width:6px; height:6px; border-radius:50%; background:var(--teal); animation:blink 1.4s ease-in-out infinite;}
+  @keyframes blink{0%,100%{opacity:1;} 50%{opacity:0.2;}}
+
+  .disclaimer{font-size:11.5px; color:var(--ink-faint); line-height:1.6; margin-top:30px; padding-top:16px; border-top:1px solid var(--line);}
+
+  .quick-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:14px; margin-bottom:10px;}
+  .qcard{background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:18px; cursor:pointer;}
+  .qcard:hover{border-color:var(--teal-dim);}
+  .qcard .qic{font-size:18px; margin-bottom:8px;}
+  .qcard .qttl{font-size:13px; font-weight:600; margin-bottom:4px;}
+  .qcard .qdesc{font-size:11.5px; color:var(--ink-faint); line-height:1.5;}
+
+  @media print{
+    .sidebar, .search-row, .btn-secondary, nav{display:none !important;}
+    body{background:#fff; color:#000;}
+    .panel{border:1px solid #ccc; background:#fff;}
+  }
+
+  @media (max-width: 760px){
+    .app{grid-template-columns:1fr;}
+    .sidebar{flex-direction:row; overflow-x:auto; padding:10px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span> TRACE</div>
+    <div class="nav-group" id="nav-main"></div>
+    <div class="nav-group" id="nav-admin-group" style="margin-top:auto;"></div>
+    <div class="sidebar-foot">
+      <div class="note">For lawful research & due-diligence use only. Aggregates only publicly available data.</div>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+const $ = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+
+const NAV = [
+  {id:'dashboard', label:'Dashboard', ic:'◆'},
+  {id:'email', label:'Email Intelligence', ic:'@'},
+  {id:'username', label:'Username Search', ic:'#'},
+  {id:'domain', label:'Domain Lookup', ic:'◌'},
+  {id:'phone', label:'Phone OSINT', ic:'☏'},
+  {id:'social', label:'Social Discovery', ic:'⚭'},
+  {id:'breach', label:'Breach Checker', ic:'!'},
+  {id:'whois', label:'WHOIS Lookup', ic:'»'},
+  {id:'dns', label:'DNS Records', ic:'∷'},
+  {id:'geoip', label:'GeoIP Lookup', ic:'⊙'},
+  {id:'report', label:'Session Report', ic:'▤'},
+];
+const ADMIN_NAV = [{id:'admin', label:'Admin Panel', ic:'⚙'}];
+
+let currentView = 'dashboard';
+const session = []; // collected results for report
+
+function renderNav(){
+  $('#nav-main').innerHTML = NAV.map(n => `
+    <button class="nav-btn ${n.id===currentView?'active':''}" data-view="${n.id}">
+      <span class="ic">${n.ic}</span>${n.label}
+    </button>`).join('');
+  $('#nav-admin-group').innerHTML = ADMIN_NAV.map(n => `
+    <button class="nav-btn ${n.id===currentView?'active':''}" data-view="${n.id}">
+      <span class="ic">${n.ic}</span>${n.label}
+    </button>`).join('');
+  $$('.nav-btn').forEach(b => b.addEventListener('click', () => goTo(b.dataset.view)));
+}
+
+function goTo(view){
+  currentView = view;
+  renderNav();
+  RENDERERS[view]();
+  window.scrollTo(0,0);
+}
+
+function loadingHtml(label){
+  return `<div class="loading"><span class="ld"></span>${label}</div>`;
+}
+
+function addToSession(type, label, data){
+  session.unshift({type, label, data, ts:new Date()});
+}
+
+function riskBadge(score){
+  if(score<=33) return `<span class="badge low">LOW · ${score}</span>`;
+  if(score<=66) return `<span class="badge med">MEDIUM · ${score}</span>`;
+  return `<span class="badge high">HIGH · ${score}</span>`;
+}
+
+// ---------- DASHBOARD ----------
+function renderDashboard(){
+  main.innerHTML = `
+    <div class="eyebrow">overview</div>
+    <h1>Investigation dashboard</h1>
+    <p class="sub">Run a quick lookup or jump straight to a tool. TRACE aggregates publicly available signals — DNS, IP geolocation, WHOIS/RDAP, and profile-discovery links.</p>
+
+    <div class="search-row">
+      <input id="quick-input" placeholder="Enter an email, domain, IP address, or username…" />
+      <button class="btn-primary" id="quick-go">Investigate</button>
+    </div>
+
+    <div class="quick-cards">
+      <div class="qcard" data-view="email"><div class="qic">@</div><div class="qttl">Email Intelligence</div><div class="qdesc">Validate format, resolve mail domain, check MX records.</div></div>
+      <div class="qcard" data-view="domain"><div class="qic">◌</div><div class="qttl">Domain Lookup</div><div class="qdesc">DNS, WHOIS/RDAP, hosting IP, and risk score.</div></div>
+      <div class="qcard" data-view="geoip"><div class="qic">⊙</div><div class="qttl">GeoIP Lookup</div><div class="qdesc">Geolocate any IPv4/IPv6 address.</div></div>
+      <div class="qcard" data-view="username"><div class="qic">#</div><div class="qttl">Username Search</div><div class="qdesc">Generate profile-check links across major platforms.</div></div>
+      <div class="qcard" data-view="breach"><div class="qic">!</div><div class="qttl">Breach Checker</div><div class="qdesc">Requires a connected breach-data API.</div></div>
+      <div class="qcard" data-view="phone"><div class="qic">☏</div><div class="qttl">Phone OSINT</div><div class="qdesc">Parse country/region from international format.</div></div>
+    </div>
+
+    <div class="disclaimer">TRACE only surfaces information that is already publicly accessible (DNS records, IP geolocation databases, WHOIS/RDAP registries, and public profile URLs). It does not scrape private accounts, bypass logins, or access non-public data sources.</div>
+  `;
+  $('#quick-go').addEventListener('click', quickRoute);
+  $('#quick-input').addEventListener('keydown', e => { if(e.key==='Enter') quickRoute(); });
+  $$('.qcard').forEach(c => c.addEventListener('click', () => goTo(c.dataset.view)));
+}
+
+function quickRoute(){
+  const v = $('#quick-input').value.trim();
+  if(!v) return;
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){ goTo('email'); setTimeout(()=>{ $('#email-input').value=v; runEmail(); },0); }
+  else if(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v) || v.includes(':')){ goTo('geoip'); setTimeout(()=>{ $('#geoip-input').value=v; runGeoIP(); },0); }
+  else if(v.includes('.') && !v.includes(' ')){ goTo('domain'); setTimeout(()=>{ $('#domain-input').value=v; runDomain(); },0); }
+  else { goTo('username'); setTimeout(()=>{ $('#username-input').value=v; runUsername(); },0); }
+}
+
+// ---------- EMAIL INTELLIGENCE ----------
+function renderEmail(){
+  main.innerHTML = `
+    <div class="eyebrow">email intelligence</div>
+    <h1>Email Intelligence</h1>
+    <p class="sub">Checks format validity, resolves the mail domain's MX/A records, and flags disposable-domain patterns. Breach exposure requires the Breach Checker module below.</p>
+    <div class="search-row">
+      <input id="email-input" placeholder="name@example.com" />
+      <button class="btn-primary" id="email-go">Analyze</button>
+    </div>
+    <div id="email-result"></div>
+  `;
+  $('#email-go').addEventListener('click', runEmail);
+  $('#email-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runEmail(); });
+}
+
+async function runEmail(){
+  const email = $('#email-input').value.trim();
+  const out = $('#email-result');
+  if(!email){ return; }
+  out.innerHTML = loadingHtml('Parsing and resolving domain…');
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if(!valid){
+    out.innerHTML = `<div class="panel"><h3>Result</h3><div class="placeholder-note"><div class="ttl">INVALID FORMAT</div>Doesn't look like a valid email address.</div></div>`;
+    return;
+  }
+  const domain = email.split('@')[1].toLowerCase();
+  const disposableHints = ['mailinator','tempmail','10minutemail','guerrillamail','yopmail','trashmail'];
+  const looksDisposable = disposableHints.some(h => domain.includes(h));
+  let mx = [];
+  try{
+    const res = await fetch(`https://dns.google/resolve?name=${domain}&type=MX`);
+    const data = await res.json();
+    mx = (data.Answer||[]).map(a => a.data);
+  } catch(e){}
+
+  let risk = 20;
+  if(looksDisposable) risk += 60;
+  if(mx.length===0) risk += 25;
+  risk = Math.min(risk,100);
+
+  addToSession('email', email, {domain, mx, looksDisposable, risk});
+
+  out.innerHTML = `
+    <div class="panel">
+      <h3>Result <span class="tag">${email}</span></h3>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">Format</div><div class="v">Valid</div></div>
+        <div class="kv"><div class="k">Mail domain</div><div class="v">${domain}</div></div>
+        <div class="kv"><div class="k">MX records</div><div class="v dim">${mx.length? mx.join(' · ') : 'none found'}</div></div>
+        <div class="kv"><div class="k">Disposable pattern</div><div class="v dim">${looksDisposable? 'matches known disposable provider' : 'no match'}</div></div>
+        <div class="kv"><div class="k">Heuristic risk</div><div class="v">${riskBadge(risk)}</div></div>
+      </div>
+    </div>
+    <div class="placeholder-note">
+      <div class="ttl">BREACH EXPOSURE — NOT CHECKED HERE</div>
+      Checking whether this address appears in known data breaches requires a connected breach-database API (e.g. Have I Been Pwned). Use the Breach Checker tab — it won't fabricate results without a live key.
+    </div>
+  `;
+}
+
+// ---------- USERNAME SEARCH ----------
+const PLATFORMS = [
+  ['GitHub','https://github.com/'], ['X / Twitter','https://x.com/'], ['Instagram','https://instagram.com/'],
+  ['Reddit','https://reddit.com/user/'], ['TikTok','https://tiktok.com/@'], ['YouTube','https://youtube.com/@'],
+  ['Twitch','https://twitch.tv/'], ['Pinterest','https://pinterest.com/'], ['Medium','https://medium.com/@'],
+  ['Telegram','https://t.me/'], ['Facebook','https://facebook.com/'], ['Steam','https://steamcommunity.com/id/'],
+];
+
+function renderUsername(){
+  main.innerHTML = `
+    <div class="eyebrow">username search</div>
+    <h1>Username Search</h1>
+    <p class="sub">Generates direct profile-check links for a handle across common platforms. Browser security policies (CORS) block automatic existence-checks from a client-side page, so each link opens for manual verification.</p>
+    <div class="search-row">
+      <input id="username-input" placeholder="handle (no @)" />
+      <button class="btn-primary" id="username-go">Generate links</button>
+    </div>
+    <div id="username-result"></div>
+  `;
+  $('#username-go').addEventListener('click', runUsername);
+  $('#username-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runUsername(); });
+}
+
+function runUsername(){
+  const u = $('#username-input').value.trim().replace(/^@/,'');
+  const out = $('#username-result');
+  if(!u) return;
+  addToSession('username', u, {platforms: PLATFORMS.length});
+  out.innerHTML = `
+    <div class="panel">
+      <h3>Profile links for "${u}" <span class="tag">${PLATFORMS.length} platforms</span></h3>
+      <div class="link-list">
+        ${PLATFORMS.map(([name,base]) => `
+          <div class="link-item"><span>${name}</span><a href="${base}${u}" target="_blank" rel="noopener">open ↗</a></div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ---------- DOMAIN LOOKUP ----------
+function renderDomain(){
+  main.innerHTML = `
+    <div class="eyebrow">domain lookup</div>
+    <h1>Domain Lookup</h1>
+    <p class="sub">Resolves DNS records, attempts a public RDAP/WHOIS lookup, and geolocates the hosting IP. Combines into a heuristic risk score.</p>
+    <div class="search-row">
+      <input id="domain-input" placeholder="example.com" />
+      <button class="btn-primary" id="domain-go">Lookup</button>
+    </div>
+    <div id="domain-result"></div>
+  `;
+  $('#domain-go').addEventListener('click', runDomain);
+  $('#domain-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runDomain(); });
+}
+
+async function dnsLookup(domain, type){
+  try{
+    const res = await fetch(`https://dns.google/resolve?name=${domain}&type=${type}`);
+    const data = await res.json();
+    return (data.Answer||[]).map(a => a.data);
+  } catch(e){ return []; }
+}
+
+async function rdapLookup(domain){
+  try{
+    const res = await fetch(`https://rdap.org/domain/${domain}`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const created = (data.events||[]).find(e=>e.eventAction==='registration')?.eventDate;
+    const registrar = (data.entities||[]).find(e=>e.roles?.includes('registrar'));
+    return {
+      created: created || null,
+      registrar: registrar?.vcardArray ? JSON.stringify(registrar.vcardArray).slice(0,80) : (data.port43 || null),
+      status: data.status || []
+    };
+  } catch(e){ return null; }
+}
+
+async function geoForIP(ip){
+  try{
+    const res = await fetch(`https://ipapi.co/${ip}/json/`);
+    const data = await res.json();
+    if(data.error) return null;
+    return data;
+  } catch(e){ return null; }
+}
+
+async function runDomain(){
+  const domain = $('#domain-input').value.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  const out = $('#domain-result');
+  if(!domain) return;
+  out.innerHTML = loadingHtml('Resolving DNS, RDAP, and hosting location…');
+
+  const [a, mx, ns, txt, rdap] = await Promise.all([
+    dnsLookup(domain,'A'), dnsLookup(domain,'MX'), dnsLookup(domain,'NS'), dnsLookup(domain,'TXT'), rdapLookup(domain)
+  ]);
+  const geo = a.length ? await geoForIP(a[0]) : null;
+
+  let risk = 15;
+  if(a.length===0) risk += 40;
+  if(!rdap) risk += 10;
+  if(ns.length===0) risk += 15;
+  risk = Math.min(risk,100);
+
+  addToSession('domain', domain, {a, mx, ns, risk});
+
+  out.innerHTML = `
+    <div class="panel">
+      <h3>DNS records <span class="tag">${domain}</span></h3>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">A</div><div class="v">${a.join(', ')||'none'}</div></div>
+        <div class="kv"><div class="k">MX</div><div class="v dim">${mx.join(' · ')||'none'}</div></div>
+        <div class="kv"><div class="k">NS</div><div class="v dim">${ns.join(' · ')||'none'}</div></div>
+        <div class="kv"><div class="k">TXT</div><div class="v dim">${txt.length? txt.length+' record(s)' : 'none'}</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>WHOIS / RDAP</h3>
+      ${rdap ? `
+        <div class="kv-grid">
+          <div class="kv"><div class="k">Registered</div><div class="v">${rdap.created ? new Date(rdap.created).toLocaleDateString() : 'unknown'}</div></div>
+          <div class="kv"><div class="k">Status</div><div class="v dim">${(rdap.status||[]).join(', ')||'unknown'}</div></div>
+        </div>
+      ` : `<div class="placeholder-note"><div class="ttl">RDAP UNAVAILABLE</div>This registry didn't return a public RDAP record (common for some TLDs, or rate-limited). Try <a href="https://www.iana.org/help/rdap" target="_blank">IANA's RDAP lookup</a> directly.</div>`}
+    </div>
+
+    ${geo ? `
+    <div class="panel">
+      <h3>Hosting location <span class="tag">${a[0]}</span></h3>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">City</div><div class="v">${geo.city||'—'}</div></div>
+        <div class="kv"><div class="k">Region</div><div class="v">${geo.region||'—'}</div></div>
+        <div class="kv"><div class="k">Country</div><div class="v">${geo.country_name||'—'}</div></div>
+        <div class="kv"><div class="k">ISP / Org</div><div class="v dim">${geo.org||'—'}</div></div>
+      </div>
+    </div>` : ''}
+
+    <div class="panel">
+      <h3>Risk score</h3>
+      <div>${riskBadge(risk)}</div>
+      <div class="placeholder-note" style="margin-top:12px;"><div class="ttl">METHODOLOGY</div>Heuristic only — derived from DNS resolvability, RDAP availability, and nameserver presence. Not a substitute for a full security assessment.</div>
+    </div>
+  `;
+}
+
+// ---------- PHONE OSINT ----------
+const COUNTRY_CODES = [
+  ['1','US/Canada'],['44','UK'],['49','Germany'],['33','France'],['81','Japan'],['86','China'],
+  ['91','India'],['234','Nigeria'],['27','South Africa'],['61','Australia'],['7','Russia'],['55','Brazil'],
+  ['52','Mexico'],['39','Italy'],['34','Spain'],['82','South Korea'],['65','Singapore'],['971','UAE'],
+];
+function renderPhone(){
+  main.innerHTML = `
+    <div class="eyebrow">phone osint</div>
+    <h1>Phone OSINT</h1>
+    <p class="sub">Parses country/region from an international-format number. Carrier, line type, and owner identity are not derivable client-side without a paid lookup API — none is fabricated here.</p>
+    <div class="search-row">
+      <input id="phone-input" placeholder="+1 555 123 4567" />
+      <button class="btn-primary" id="phone-go">Parse</button>
+    </div>
+    <div id="phone-result"></div>
+  `;
+  $('#phone-go').addEventListener('click', runPhone);
+  $('#phone-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runPhone(); });
+}
+function runPhone(){
+  const raw = $('#phone-input').value.trim();
+  const out = $('#phone-result');
+  if(!raw) return;
+  const digits = raw.replace(/[^\d+]/g,'');
+  if(!digits.startsWith('+')){
+    out.innerHTML = `<div class="panel"><div class="placeholder-note"><div class="ttl">MISSING COUNTRY CODE</div>Enter in international format starting with "+", e.g. +14155551234.</div></div>`;
+    return;
+  }
+  const body = digits.slice(1);
+  let match = COUNTRY_CODES.find(([code]) => body.startsWith(code));
+  addToSession('phone', raw, {country: match?.[1]});
+  out.innerHTML = `
+    <div class="panel">
+      <h3>Parsed result <span class="tag">${raw}</span></h3>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">Country / region</div><div class="v">${match? match[1] : 'unrecognized prefix'}</div></div>
+        <div class="kv"><div class="k">Country code</div><div class="v dim">${match? '+'+match[0] : '—'}</div></div>
+        <div class="kv"><div class="k">National number</div><div class="v dim">${match? body.slice(match[0].length) : body}</div></div>
+      </div>
+    </div>
+    <div class="placeholder-note"><div class="ttl">CARRIER / LINE TYPE — NOT AVAILABLE</div>Real carrier lookup, line-type (mobile/VoIP/landline), and owner data require a paid telephony API (e.g. Twilio Lookup, Numverify). Connect one server-side to extend this module.</div>
+  `;
+}
+
+// ---------- SOCIAL DISCOVERY ----------
+function renderSocial(){
+  main.innerHTML = `
+    <div class="eyebrow">social discovery</div>
+    <h1>Social Media Discovery</h1>
+    <p class="sub">Same link-generation approach as Username Search, applied across a wider set of social and community platforms.</p>
+    <div class="search-row">
+      <input id="social-input" placeholder="handle or display name" />
+      <button class="btn-primary" id="social-go">Find profiles</button>
+    </div>
+    <div id="social-result"></div>
+  `;
+  $('#social-go').addEventListener('click', runSocial);
+  $('#social-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runSocial(); });
+}
+const SOCIAL_PLATFORMS = [...PLATFORMS, ['Mastodon','https://mastodon.social/@'], ['LinkedIn','https://linkedin.com/in/'], ['Snapchat','https://snapchat.com/add/'], ['Discord (search)','https://discord.com/users/']];
+function runSocial(){
+  const u = $('#social-input').value.trim().replace(/^@/,'');
+  const out = $('#social-result');
+  if(!u) return;
+  addToSession('social', u, {});
+  out.innerHTML = `
+    <div class="panel">
+      <h3>Profile links for "${u}" <span class="tag">${SOCIAL_PLATFORMS.length} platforms</span></h3>
+      <div class="link-list">
+        ${SOCIAL_PLATFORMS.map(([name,base]) => `<div class="link-item"><span>${name}</span><a href="${base}${u}" target="_blank" rel="noopener">open ↗</a></div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ---------- BREACH CHECKER ----------
+function renderBreach(){
+  main.innerHTML = `
+    <div class="eyebrow">data breach checker</div>
+    <h1>Breach Checker</h1>
+    <p class="sub">Checking real breach exposure requires a connected breach-intelligence API (e.g. Have I Been Pwned), called from a server you control — never from client-side JavaScript, since that would expose your API key.</p>
+    <div class="search-row">
+      <input id="breach-input" placeholder="email address" disabled />
+      <button class="btn-primary" disabled>Check (no API connected)</button>
+    </div>
+    <div class="placeholder-note">
+      <div class="ttl">NOT CONNECTED</div>
+      To make this live: stand up a small backend endpoint that calls HIBP's API with a server-side key, and have this button call that endpoint. I can scaffold that backend for you if you'd like — just say so.
+    </div>
+  `;
+}
+
+// ---------- WHOIS ----------
+function renderWhois(){
+  main.innerHTML = `
+    <div class="eyebrow">whois lookup</div>
+    <h1>WHOIS Lookup</h1>
+    <p class="sub">Standalone RDAP/WHOIS lookup for a domain.</p>
+    <div class="search-row">
+      <input id="whois-input" placeholder="example.com" />
+      <button class="btn-primary" id="whois-go">Lookup</button>
+    </div>
+    <div id="whois-result"></div>
+  `;
+  $('#whois-go').addEventListener('click', runWhois);
+  $('#whois-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runWhois(); });
+}
+async function runWhois(){
+  const domain = $('#whois-input').value.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  const out = $('#whois-result');
+  if(!domain) return;
+  out.innerHTML = loadingHtml('Querying RDAP registry…');
+  const rdap = await rdapLookup(domain);
+  addToSession('whois', domain, {found: !!rdap});
+  out.innerHTML = rdap ? `
+    <div class="panel">
+      <h3>RDAP record <span class="tag">${domain}</span></h3>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">Registered</div><div class="v">${rdap.created ? new Date(rdap.created).toLocaleDateString() : 'unknown'}</div></div>
+        <div class="kv"><div class="k">Status</div><div class="v dim">${(rdap.status||[]).join(', ')||'unknown'}</div></div>
+      </div>
+    </div>
+  ` : `<div class="placeholder-note"><div class="ttl">NO RECORD RETURNED</div>Try <a href="https://www.iana.org/help/rdap" target="_blank">IANA's RDAP lookup</a> directly, or the registry's own WHOIS page.</div>`;
+}
+
+// ---------- DNS RECORDS ----------
+function renderDns(){
+  main.innerHTML = `
+    <div class="eyebrow">dns records</div>
+    <h1>DNS Records</h1>
+    <p class="sub">Full record dump for a domain via Google's public DNS-over-HTTPS resolver.</p>
+    <div class="search-row">
+      <input id="dns-input" placeholder="example.com" />
+      <button class="btn-primary" id="dns-go">Resolve</button>
+    </div>
+    <div id="dns-result"></div>
+  `;
+  $('#dns-go').addEventListener('click', runDns);
+  $('#dns-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runDns(); });
+}
+async function runDns(){
+  const domain = $('#dns-input').value.trim().toLowerCase();
+  const out = $('#dns-result');
+  if(!domain) return;
+  out.innerHTML = loadingHtml('Resolving records…');
+  const types = ['A','AAAA','MX','NS','TXT','CNAME','SOA'];
+  const results = {};
+  await Promise.all(types.map(async t => { results[t] = await dnsLookup(domain, t); }));
+  addToSession('dns', domain, results);
+  out.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Value</th></tr></thead>
+        <tbody>
+          ${types.map(t => `<tr><td>${t}</td><td>${results[t].length ? results[t].join(' · ') : '—'}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ---------- GEOIP ----------
+function renderGeoip(){
+  main.innerHTML = `
+    <div class="eyebrow">geoip lookup</div>
+    <h1>GeoIP Lookup</h1>
+    <p class="sub">Geolocates an IP address using public IP-geolocation data. Accuracy varies — typically city/region level, not exact street address.</p>
+    <div class="search-row">
+      <input id="geoip-input" placeholder="8.8.8.8" />
+      <button class="btn-primary" id="geoip-go">Locate</button>
+    </div>
+    <div id="geoip-result"></div>
+  `;
+  $('#geoip-go').addEventListener('click', runGeoIP);
+  $('#geoip-input').addEventListener('keydown', e=>{ if(e.key==='Enter') runGeoIP(); });
+}
+async function runGeoIP(){
+  const ip = $('#geoip-input').value.trim();
+  const out = $('#geoip-result');
+  if(!ip) return;
+  out.innerHTML = loadingHtml('Querying geolocation database…');
+  const geo = await geoForIP(ip);
+  addToSession('geoip', ip, geo||{});
+  if(!geo){ out.innerHTML = `<div class="placeholder-note"><div class="ttl">LOOKUP FAILED</div>Couldn't resolve geolocation for that address — it may be invalid, private/reserved, or the lookup was rate-limited.</div>`; return; }
+  out.innerHTML = `
+    <div class="panel">
+      <h3>Geolocation <span class="tag">${ip}</span></h3>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">City</div><div class="v">${geo.city||'—'}</div></div>
+        <div class="kv"><div class="k">Region</div><div class="v">${geo.region||'—'}</div></div>
+        <div class="kv"><div class="k">Country</div><div class="v">${geo.country_name||'—'} (${geo.country||'—'})</div></div>
+        <div class="kv"><div class="k">ISP / Org</div><div class="v dim">${geo.org||'—'}</div></div>
+        <div class="kv"><div class="k">Timezone</div><div class="v dim">${geo.timezone||'—'}</div></div>
+        <div class="kv"><div class="k">Coordinates</div><div class="v dim">${geo.latitude||'—'}, ${geo.longitude||'—'}</div></div>
+      </div>
+    </div>
+  `;
+}
+
+// ---------- SESSION REPORT ----------
+function renderReport(){
+  main.innerHTML = `
+    <div class="eyebrow">session report</div>
+    <h1>Investigation Report</h1>
+    <p class="sub">Compiles every lookup run in this session. Use your browser's print dialog ("Save as PDF") to export.</p>
+    <div class="search-row">
+      <button class="btn-primary" id="print-btn">Export as PDF</button>
+      <button class="btn-secondary" id="clear-session-btn">Clear session</button>
+    </div>
+    <div id="report-body"></div>
+  `;
+  $('#print-btn').addEventListener('click', () => window.print());
+  $('#clear-session-btn').addEventListener('click', () => { session.length = 0; renderReport(); });
+
+  const body = $('#report-body');
+  if(session.length===0){ body.innerHTML = `<div class="empty-state">No lookups run yet this session. Use any tool, then return here to export a report.</div>`; return; }
+  body.innerHTML = session.map(item => `
+    <div class="panel">
+      <h3>${item.type.toUpperCase()} — ${item.label} <span class="tag">${item.ts.toLocaleString()}</span></h3>
+      <div class="kv-grid">
+        ${Object.entries(item.data).map(([k,v]) => `
+          <div class="kv"><div class="k">${k}</div><div class="v dim">${Array.isArray(v) ? (v.join(', ')||'none') : (v===undefined||v===null||v==='' ? '—' : String(v))}</div></div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ---------- ADMIN PANEL (visitor log) ----------
+function parseUA(ua){
+  let browser='unknown';
+  if(/Edg\//.test(ua)) browser='Edge'; else if(/Chrome\//.test(ua)&&!/Chromium/.test(ua)) browser='Chrome';
+  else if(/Firefox\//.test(ua)) browser='Firefox'; else if(/Safari\//.test(ua)&&!/Chrome/.test(ua)) browser='Safari';
+  else if(/OPR\//.test(ua)) browser='Opera';
+  let os='unknown';
+  if(/Windows/.test(ua)) os='Windows'; else if(/Mac OS X/.test(ua)) os='macOS';
+  else if(/Android/.test(ua)) os='Android'; else if(/iPhone|iPad|iPod/.test(ua)) os='iOS';
+  else if(/Linux/.test(ua)) os='Linux';
+  let deviceType='Desktop';
+  if(/Mobi|Android.*Mobile|iPhone/.test(ua)) deviceType='Mobile'; else if(/iPad|Tablet/.test(ua)) deviceType='Tablet';
+  let deviceName=os+' device';
+  if(/iPhone/.test(ua)) deviceName='iPhone'; else if(/iPad/.test(ua)) deviceName='iPad';
+  else if(/Android/.test(ua)){ const m=ua.match(/Android[^;]*;\s*([^)]+)\)/); deviceName=m?m[1].split('Build')[0].trim():'Android device'; }
+  else if(/Macintosh/.test(ua)) deviceName='Mac'; else if(/Windows/.test(ua)) deviceName='Windows PC';
+  else if(/Linux/.test(ua)) deviceName='Linux machine';
+  return {browser, os, deviceType, deviceName};
+}
+async function getIP(){
+  try{ const r = await fetch('https://api.ipify.org?format=json'); const d = await r.json(); return d.ip; } catch(e){ return 'unavailable'; }
+}
+let visitLogged = false;
+async function logVisitOnce(){
+  if(visitLogged) return; visitLogged = true;
+  const ua = navigator.userAgent;
+  const {browser, os, deviceType, deviceName} = parseUA(ua);
+  const ip = await getIP();
+  const entry = {ip, browser, os, deviceType, deviceName, timestamp: new Date().toISOString()};
+  try{
+    const key = 'visit:'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+    await window.storage.set(key, JSON.stringify(entry), true);
+  } catch(e){ console.error(e); }
+}
+async function loadVisits(){
+  let visits = [];
+  try{
+    const list = await window.storage.list('visit:', true);
+    for(const k of (list?.keys||[])){
+      try{ const r = await window.storage.get(k, true); if(r?.value) visits.push(JSON.parse(r.value)); } catch(e){}
+    }
+  } catch(e){}
+  visits.sort((a,b) => new Date(b.timestamp)-new Date(a.timestamp));
+  return visits;
+}
+async function renderAdmin(){
+  main.innerHTML = `
+    <div class="eyebrow">admin panel</div>
+    <h1>Visitor Log</h1>
+    <p class="sub">Records every visit to this platform: IP address, browser, and device.</p>
+    <div class="search-row">
+      <button class="btn-secondary" id="refresh-btn">Refresh</button>
+      <button class="btn-secondary" id="clear-btn">Clear log</button>
+    </div>
+    <div id="admin-body"><div class="loading"><span class="ld"></span>Loading log…</div></div>
+  `;
+  $('#refresh-btn').addEventListener('click', renderAdmin);
+  $('#clear-btn').addEventListener('click', async () => {
+    if(!confirm('Clear the entire visitor log?')) return;
+    const list = await window.storage.list('visit:', true);
+    for(const k of (list?.keys||[])) await window.storage.delete(k, true);
+    renderAdmin();
+  });
+  const visits = await loadVisits();
+  const body = $('#admin-body');
+  const uniqueIPs = new Set(visits.map(v=>v.ip)).size;
+  const mobileCount = visits.filter(v=>v.deviceType==='Mobile').length;
+  let stats = `
+    <div class="stat-row">
+      <div class="stat"><div class="label">Total visits</div><div class="num">${visits.length}</div></div>
+      <div class="stat"><div class="label">Unique IPs</div><div class="num">${uniqueIPs}</div></div>
+      <div class="stat"><div class="label">Mobile visits</div><div class="num">${mobileCount}</div></div>
+    </div>`;
+  if(visits.length===0){ body.innerHTML = stats + `<div class="empty-state">No visits logged yet.</div>`; return; }
+  body.innerHTML = stats + `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>IP address</th><th>Browser</th><th>Device</th><th>Type</th><th>OS</th><th>Logged at</th></tr></thead>
+        <tbody>
+          ${visits.map(v => { const t=new Date(v.timestamp); return `<tr><td>${v.ip}</td><td>${v.browser}</td><td>${v.deviceName}</td><td>${v.deviceType}</td><td>${v.os}</td><td>${t.toLocaleDateString()} ${t.toLocaleTimeString()}</td></tr>`; }).join('') }
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+const RENDERERS = {
+  dashboard: renderDashboard, email: renderEmail, username: renderUsername, domain: renderDomain,
+  phone: renderPhone, social: renderSocial, breach: renderBreach, whois: renderWhois,
+  dns: renderDns, geoip: renderGeoip, report: renderReport, admin: renderAdmin,
+};
+
+const main = $('#main');
+renderNav();
+renderDashboard();
+logVisitOnce();
+</script>
+</body>
+</html>
